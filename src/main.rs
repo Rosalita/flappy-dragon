@@ -7,22 +7,85 @@ enum GameMode {
     Playing,
     End,
 }
+//const SCREEN_WIDTH: i32 = 80;
+const SCREEN_HEIGTH: i32 = 50;
+const FRAME_DURATION: f32 = 75.0;
+
+struct Player {
+    x: i32,
+    y: i32,
+    velocity: f32,
+}
+impl Player {
+    fn new(x: i32, y: i32) -> Self {
+        return Self {
+            x,
+            y,
+            velocity: 0.0, // floats must be fractional, 0 would cause a mis-matched type error.
+        };
+    }
+    fn render(&mut self, ctx: &mut BTerm) {
+        // set is a bracket-lib function that sets a single char on the screen.
+        // to_cp437 converts a unicode char from source code to the matching Codepage 437 char number.
+        ctx.set(0, self.y, YELLOW, BLACK, to_cp437('@'))
+    }
+    fn gravity_and_move(&mut self) {
+        if self.velocity < 2.0 { // check for terminal velocity, 
+            self.velocity += 0.2; // if not moving at terminal velocity, increase velocity
+        }
+        // add the velocity to the players y, increasing y moves the player down.
+        // to add a float to an int, the float must be converted to int.
+        self.y += self.velocity as i32; // this conversion will always round the float down to i32.
+        // even thought the player isn't moving, incrementing x tracks progression through the level
+        self.x += 1; 
+        if self.y < 0 {
+            self.y = 0;
+        }
+    }
+    fn flap(&mut self){
+        // setting velocity to -2.0 will move the player upwards.
+        self.velocity = -2.0;
+    }
+}
 
 struct State {
+    player: Player,
+    frame_time: f32, // used to track the time between frames to control game speed.
     mode: GameMode,
 }
 impl State {
     fn new() -> Self {
         State {
+            player: Player::new(5, 25),
+            frame_time: 0.0,
             mode: GameMode::Menu,
         }
     }
     fn play(&mut self, ctx: &mut BTerm) {
         ctx.cls();
-        // TODO: game play goes here
-        self.mode = GameMode::End;
+        ctx.cls_bg(NAVY); // set the background colour
+        // tick() runs as fast as it can.
+        // ctx.frame_time_ms contains the time elapsed since the last time tick() was called.
+        self.frame_time += ctx.frame_time_ms; 
+        // self.frame_time counts up until FRAME_DURATION is reached
+        if self.frame_time > FRAME_DURATION{
+            self.frame_time = 0.0; // then it resets
+            self.player.gravity_and_move(); // and updates the game.
+        }
+        if let Some(VirtualKeyCode::Space) = ctx.key { // if the user is pressing spacebar.
+            self.player.flap();
+        }
+
+        self.player.render(ctx);
+        ctx.print(0, 0, "Press SPACE to flap.");
+        // if flappy dragon falls off the bottom of the screen, the game ends.
+        if self.player.y > SCREEN_HEIGTH{
+            self.mode = GameMode::End;
+        }
     }
     fn restart(&mut self) {
+        self.player = Player::new(5, 25);
+        self.frame_time = 0.0;
         self.mode = GameMode::Playing;
     }
     fn main_menu(&mut self, ctx: &mut BTerm) {
